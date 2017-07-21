@@ -1,8 +1,9 @@
-import concurrent.futures
-import dill
 import threading
 import queue
 import ftpclient
+import requests
+import json
+import FadeBuilder
 
 
 class FadeExecutor(object):
@@ -35,10 +36,13 @@ class FadeExecutor(object):
                 f.set_exception(e)
                 return
 
-            exe_key = ftpclient.upload()  # Fabio.upload(exe)
-            http.post(key)  # send executable key to Nachi
-            results_key = http.get()  # get results key from nachi
-            f.results_key = results_key
+            exe_key = ftpclient.upload(exe)  # Fabio.upload(exe)
+            url = "www.Nachi.com"
+            payload = {"name": "exe name", "key": exe_key}
+            requests.post(url=url, data=json.dumps(payload))  # send exe to Nachi
+
+            results_key = requests.get(url)  # get results key from Nachi
+            f.results_key = results_key.text
 
             return f
 
@@ -119,12 +123,14 @@ class FadeFuture:
     def fetch(self):
         """Asks the server (NACHI) for results, block until results returned"""
 
-        results = http.get(self.results_key)  # get results from nachi
+        results = ftpclient.downloads(self.results_key)  # get results from nachi
+
+        result = FadeBuilder.deserialize(results)
 
         if results is BaseException:
-            self.set_exception(results)
+            self.set_exception(result)
         else:
-            self.set_result(results)
+            self.set_result(result)
 
         self._state = FadeFuture.FINISHED
 
