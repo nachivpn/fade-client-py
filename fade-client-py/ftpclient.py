@@ -6,7 +6,7 @@ import ftplib
 
 
 def setup():
-    ftp = ftplib.FTP("fade-ftp-server")
+    ftp = ftplib.FTP("fade-ftp-service")
     ftp.login()  # anonimous
     ftp.set_pasv("false")
 
