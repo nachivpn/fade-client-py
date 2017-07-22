@@ -4,6 +4,7 @@ import ftpclient
 import requests
 import json
 import FadeBuilder
+import pickle as pickle
 
 
 class FadeExecutor(object):
@@ -11,6 +12,7 @@ class FadeExecutor(object):
         """"Initiating a new FadeExecutor"""
         self._shutdown_lock = threading.Lock()
         self._work_queue = queue.Queue()
+        self.ftp_server = ftpclient.setup()
 
     def __enter__(self):
         return self
@@ -21,37 +23,34 @@ class FadeExecutor(object):
     def submit(self, fn, *args, **kwargs):
         """"Submit a new task to the queue
 
-        1. Serialize fn(args, kwargs)
+        1. Serialize fn(ser, kwargs)
         2. Package all dependencies
         3. Build executable
         4. Send to server
         """
 
         with self._shutdown_lock:
-            f = FadeFuture()  # apply future to our needs? requires FadeFuture?
+            name = FadeBuilder.serialize(fn, args, kwargs)
+            module = fn.__module__
 
-            try:
-                exe = None  # Badisa.build(fn, args, kwargs)
-            except BaseException as e:
-                f.set_exception(e)
-                return
+            exe_name = None  # Badisa.build(ser)
 
-            exe_key = ftpclient.upload(exe)  # Fabio.upload(exe)
+            exe_key = ftpclient.upload(self.ftp_server, exe_name)  # Fabio.upload(exe)
             url = "www.Nachi.com"
-            payload = {"name": "exe name", "key": exe_key}
+            payload = {"name": "exe name","args": name, "module": module, "key": exe_key}
             requests.post(url=url, data=json.dumps(payload))  # send exe to Nachi
 
             results_key = requests.get(url)  # get results key from Nachi
-            f.results_key = results_key.text
+            f = FadeFuture(results_key.text, self.ftp_server)  # apply future to our needs? requires FadeFuture?
 
             return f
 
 
 # class _FadeWorkItem(object):
-#     def __init__(self, future, fn, args, kwargs):
+#     def __init__(self, future, fn, ser, kwargs):
 #         self.future = future
 #         self.fn = fn
-#         self.args = args
+#         self.ser = ser
 #         self.kwargs = kwargs
 #
 #     def run(self):
@@ -63,7 +62,7 @@ class FadeExecutor(object):
 #
 #         # flow is threading
 #         try:
-#             result = self.fn(*self.args, **self.kwargs)
+#             result = self.fn(*self.ser, **self.kwargs)
 #         except BaseException as e:
 #             self.future.set_exception(e)
 #         else:
@@ -76,13 +75,14 @@ class FadeFuture:
     RUNNING = 'RUNNING'
     FINISHED = 'FINISHED'
 
-    def __init__(self):
+    def __init__(self, results_key, ftp_server):
         """Initializes the future. Should not be called by clients."""
         self._condition = threading.Condition()
         self._state = FadeFuture.PENDING
         self._result = None
         self._exception = None
-        self.results_key = None
+        self.results_key = results_key
+        self.ftp_server = ftp_server
 
     def __repr__(self):
         with self._condition:
@@ -123,11 +123,11 @@ class FadeFuture:
     def fetch(self):
         """Asks the server (NACHI) for results, block until results returned"""
 
-        results = ftpclient.downloads(self.results_key)  # get results from nachi
+        ftpclient.download(self.ftp_server, self.results_key)  # get results from nachi
 
-        result = FadeBuilder.deserialize(results)
+        result = FadeBuilder.deserialize(self.results_key)
 
-        if results is BaseException:
+        if result is BaseException:
             self.set_exception(result)
         else:
             self.set_result(result)

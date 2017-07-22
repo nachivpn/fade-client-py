@@ -1,10 +1,9 @@
 from Fade import FadeExecutor
 
 
-def h(x): x
-
+def x(a, b): return [a + b, a - b]
 
 with FadeExecutor() as f:
-    future = f.submit(h, "tryme")
+    future = f.submit(x, 5, 3)
 
 result = future.result()

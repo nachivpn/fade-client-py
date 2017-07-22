@@ -2,14 +2,22 @@
 import ftplib
 import sys
 import os
- 
+import ftplib
+
+
+def setup():
+    ftp = ftplib.FTP("fade-ftp-server")
+    ftp.login()  # anonimous
+    ftp.set_pasv("false")
+
+    return ftp
 
 
 def download(ftp, filename):
     try:
-        ftp.retrbinary("RETR " + filename ,open(filename, 'wb').write)
+        ftp.retrbinary("RETR " + filename, open(filename, 'wb').write)
     except:
-        print ("Error downloading" + filename)
+        print("Error downloading" + filename)
 
 
 def upload(ftp, file):
